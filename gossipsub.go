@@ -865,6 +865,7 @@ func (gs *GossipSubRouter) handleIWant(p peer.ID, ctl *pb.ControlMessage) []*pb.
 				continue
 			}
 
+			msg.PropaType = pb.PropagationType_LAZY_PULL.Enum()
 			ihave[mid] = msg.Message
 		}
 	}
