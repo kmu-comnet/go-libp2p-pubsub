@@ -67,6 +67,7 @@ message TraceEvent {
     optional string topic = 2;
     optional bytes receivedFrom = 3;
     optional PropagationType propaType = 4;
+    optional int32 hopCount = 5;
   }
 
   message AddPeer {

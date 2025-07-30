@@ -56,6 +56,7 @@ func verifyMessageSignature(m *pb.Message) error {
 	xm.Signature = nil
 	xm.Key = nil
 	xm.PropaType = nil // don't sign the propagation type, it is not part of the message content
+	xm.HopCount = nil  // don't sign the hop count, it is not part of the message content
 
 	bytes, err := xm.Marshal()
 	if err != nil {
@@ -111,6 +112,7 @@ func messagePubKey(m *pb.Message) (crypto.PubKey, error) {
 func signMessage(pid peer.ID, key crypto.PrivKey, m *pb.Message) error {
 	xm := *m
 	xm.PropaType = nil // don't sign the propagation type, it is not part of the message content
+	xm.HopCount = nil  // don't sign the hop count, it is not part of the message content
 
 	bytes, err := xm.Marshal()
 	if err != nil {

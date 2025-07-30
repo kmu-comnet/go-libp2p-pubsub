@@ -289,12 +289,14 @@ func (t *Topic) validate(ctx context.Context, data []byte, propa *pb.Propagation
 		}
 	}
 
+	hopCount := int32(-1)
 	m := &pb.Message{
 		Data:      data,
 		Topic:     &t.topic,
 		From:      nil,
 		Seqno:     nil,
 		PropaType: propa,
+		HopCount:  &hopCount,
 	}
 	if pid != "" {
 		m.From = []byte(pid)

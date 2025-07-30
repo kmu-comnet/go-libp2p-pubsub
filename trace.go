@@ -189,6 +189,7 @@ func (t *pubsubTracer) DeliverMessage(msg *Message) {
 			Topic:        msg.Topic,
 			ReceivedFrom: []byte(msg.ReceivedFrom),
 			PropaType:    (*pb.TraceEvent_PropagationType)(msg.PropaType),
+			HopCount:     msg.HopCount,
 		},
 	}
 

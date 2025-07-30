@@ -1163,6 +1163,8 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 
 func (gs *GossipSubRouter) Publish(msg *Message) {
 	for p, rpc := range gs.rpcs(msg) {
+		*msg.HopCount++
+
 		gs.sendRPC(p, rpc, false)
 	}
 }
