@@ -22,6 +22,7 @@ message Message {
 	optional bytes signature = 5;
 	optional bytes key = 6;
 	optional PropagationType propaType = 7;
+	optional uint32 hopCount = 8;
 }
 
 enum PropagationType {
