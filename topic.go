@@ -234,7 +234,7 @@ func setDefaultBatchPublishOptions(opts *BatchPublishOptions) {
 
 // Publish publishes data to topic.
 func (t *Topic) Publish(ctx context.Context, data []byte, opts ...PubOpt) error {
-	msg, err := t.validate(ctx, data, pb.PropagationType_EAGER_PUSH.Enum(), opts...)
+	msg, err := t.validate(ctx, data, pb.PropagationType_EAGER_PUSH.Enum(), 0, opts...)
 	if err != nil {
 		if errors.Is(err, dupeErr{}) {
 			// If it was a duplicate, we return nil to indicate success.
@@ -247,7 +247,7 @@ func (t *Topic) Publish(ctx context.Context, data []byte, opts ...PubOpt) error 
 }
 
 func (t *Topic) AddToBatch(ctx context.Context, batch *MessageBatch, data []byte, opts ...PubOpt) error {
-	msg, err := t.validate(ctx, data, pb.PropagationType_EAGER_PUSH.Enum(), opts...)
+	msg, err := t.validate(ctx, data, pb.PropagationType_EAGER_PUSH.Enum(), 0, opts...)
 	if err != nil {
 		if errors.Is(err, dupeErr{}) {
 			// If it was a duplicate, we return nil to indicate success.
@@ -261,7 +261,7 @@ func (t *Topic) AddToBatch(ctx context.Context, batch *MessageBatch, data []byte
 	return nil
 }
 
-func (t *Topic) validate(ctx context.Context, data []byte, propa *pb.PropagationType, opts ...PubOpt) (*Message, error) {
+func (t *Topic) validate(ctx context.Context, data []byte, propa *pb.PropagationType, hopCount int32, opts ...PubOpt) (*Message, error) {
 	t.mux.RLock()
 	defer t.mux.RUnlock()
 	if t.closed {
@@ -289,7 +289,6 @@ func (t *Topic) validate(ctx context.Context, data []byte, propa *pb.Propagation
 		}
 	}
 
-	hopCount := int32(-1)
 	m := &pb.Message{
 		Data:      data,
 		Topic:     &t.topic,

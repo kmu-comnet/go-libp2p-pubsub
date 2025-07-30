@@ -1150,6 +1150,8 @@ func (gs *GossipSubRouter) connector() {
 func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishOptions) {
 	strategy := opts.Strategy
 	for _, msg := range messages {
+		*msg.HopCount++
+
 		msgID := gs.p.idGen.ID(msg)
 		for p, rpc := range gs.rpcs(msg) {
 			strategy.AddRPC(p, msgID, rpc)
@@ -1162,8 +1164,9 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 }
 
 func (gs *GossipSubRouter) Publish(msg *Message) {
+	*msg.HopCount++
+
 	for p, rpc := range gs.rpcs(msg) {
-		*msg.HopCount++
 
 		gs.sendRPC(p, rpc, false)
 	}
