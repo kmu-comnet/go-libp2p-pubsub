@@ -239,6 +239,8 @@ type GossipSubParams struct {
 
 	// IDONTWANT is cleared when it's older than the TTL.
 	IDontWantMessageTTL int
+
+	HopWaveCount int
 }
 
 // NewGossipSub returns a new PubSub object using the default GossipSubRouter as the router.
@@ -373,6 +375,19 @@ func WithFloodPublish(floodPublish bool) Option {
 		}
 
 		gs.floodPublish = floodPublish
+
+		return nil
+	}
+}
+
+func WithHopWavePublish(hopWave bool) Option {
+	return func(ps *PubSub) error {
+		gs, ok := ps.rt.(*GossipSubRouter)
+		if !ok {
+			return fmt.Errorf("pubsub router is not gossipsub")
+		}
+
+		gs.hopWavePublish = hopWave
 
 		return nil
 	}
@@ -517,6 +532,9 @@ type GossipSubRouter struct {
 
 	// whether to use flood publishing
 	floodPublish bool
+
+	// whether to use hop wave publishing
+	hopWavePublish bool
 
 	// number of heartbeats since the beginning of time; this allows us to amortize some resource
 	// clean up -- eg backoff clean up.
@@ -1153,8 +1171,14 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 		*msg.HopCount++
 
 		msgID := gs.p.idGen.ID(msg)
-		for p, rpc := range gs.rpcs(msg) {
-			strategy.AddRPC(p, msgID, rpc)
+		if gs.hopWavePublish && *msg.HopCount%2 == 0 {
+			for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
+				strategy.AddRPC(p, msgID, rpc)
+			}
+		} else {
+			for p, rpc := range gs.rpcs(msg) {
+				strategy.AddRPC(p, msgID, rpc)
+			}
 		}
 	}
 
@@ -1166,9 +1190,48 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 func (gs *GossipSubRouter) Publish(msg *Message) {
 	*msg.HopCount++
 
-	for p, rpc := range gs.rpcs(msg) {
+	if gs.hopWavePublish && *msg.HopCount%2 == 0 {
+		for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
+			gs.sendRPC(p, rpc, false)
+		}
+	} else {
+		for p, rpc := range gs.rpcs(msg) {
+			gs.sendRPC(p, rpc, false)
+		}
+	}
+}
 
-		gs.sendRPC(p, rpc, false)
+func selectPeers(item iter.Seq2[peer.ID, *RPC], count int) iter.Seq2[peer.ID, *RPC] {
+	return func(yield func(peer.ID, *RPC) bool) {
+		items := make([]struct {
+			peer peer.ID
+			rpc  *RPC
+		}, 0)
+
+		for p, rpc := range item {
+			items = append(items, struct {
+				peer peer.ID
+				rpc  *RPC
+			}{p, rpc})
+		}
+
+		// Shuffle the items
+		for i := range items {
+			j := rand.Intn(i + 1)
+			items[i], items[j] = items[j], items[i]
+		}
+
+		// Select up to count items
+		selected := items
+		if count > 0 && len(items) > count {
+			selected = items[:count]
+		}
+
+		for _, item := range selected {
+			if !yield(item.peer, item.rpc) {
+				return
+			}
+		}
 	}
 }
 
