@@ -1174,6 +1174,9 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 		if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
 			*msg.HopCount = 0
 		}
+		if gs.params.HopWaveCount == 0 {
+			*msg.HopCount = 1
+		}
 
 		msgID := gs.p.idGen.ID(msg)
 		if gs.hopWavePublish && *msg.HopCount == 0 {
@@ -1197,6 +1200,9 @@ func (gs *GossipSubRouter) Publish(msg *Message) {
 
 	if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
 		*msg.HopCount = 0
+	}
+	if gs.params.HopWaveCount == 0 {
+		*msg.HopCount = 1
 	}
 
 	if gs.hopWavePublish && *msg.HopCount == 0 {
