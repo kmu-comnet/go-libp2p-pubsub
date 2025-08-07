@@ -240,7 +240,8 @@ type GossipSubParams struct {
 	// IDONTWANT is cleared when it's older than the TTL.
 	IDontWantMessageTTL int
 
-	HopWaveCount int
+	HopWaveCount    int
+	HopWaveInterval int
 }
 
 // NewGossipSub returns a new PubSub object using the default GossipSubRouter as the router.
@@ -1170,8 +1171,12 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 	for _, msg := range messages {
 		*msg.HopCount++
 
+		if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
+			*msg.HopCount = 0
+		}
+
 		msgID := gs.p.idGen.ID(msg)
-		if gs.hopWavePublish && *msg.HopCount%2 == 0 {
+		if gs.hopWavePublish && *msg.HopCount == 0 {
 			for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
 				strategy.AddRPC(p, msgID, rpc)
 			}
@@ -1190,7 +1195,11 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 func (gs *GossipSubRouter) Publish(msg *Message) {
 	*msg.HopCount++
 
-	if gs.hopWavePublish && *msg.HopCount%2 == 0 {
+	if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
+		*msg.HopCount = 0
+	}
+
+	if gs.hopWavePublish && *msg.HopCount == 0 {
 		for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
 			gs.sendRPC(p, rpc, false)
 		}
