@@ -240,7 +240,7 @@ type GossipSubParams struct {
 	// IDONTWANT is cleared when it's older than the TTL.
 	IDontWantMessageTTL int
 
-	HopWaveCount    int
+	HopWaveFactor   float64
 	HopWaveInterval int
 }
 
@@ -1169,21 +1169,28 @@ func (gs *GossipSubRouter) connector() {
 func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishOptions) {
 	strategy := opts.Strategy
 	for _, msg := range messages {
-		*msg.HopCount++
+		if gs.hopWavePublish {
+			*msg.HopCount += 1
 
-		if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
-			*msg.HopCount = 0
-		}
-		if gs.params.HopWaveCount == 0 {
-			*msg.HopCount = 1
-		}
-
-		msgID := gs.p.idGen.ID(msg)
-		if gs.hopWavePublish && *msg.HopCount == 0 {
-			for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
-				strategy.AddRPC(p, msgID, rpc)
+			if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
+				*msg.HopCount = 0
 			}
+
+			msgID := gs.p.idGen.ID(msg)
+			if *msg.HopCount != 0 {
+				for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveFactor) {
+					strategy.AddRPC(p, msgID, rpc)
+				}
+			} else {
+				for p, rpc := range gs.rpcs(msg) {
+					strategy.AddRPC(p, msgID, rpc)
+				}
+			}
+
 		} else {
+			*msg.HopCount = 0
+
+			msgID := gs.p.idGen.ID(msg)
 			for p, rpc := range gs.rpcs(msg) {
 				strategy.AddRPC(p, msgID, rpc)
 			}
@@ -1196,27 +1203,32 @@ func (gs *GossipSubRouter) PublishBatch(messages []*Message, opts *BatchPublishO
 }
 
 func (gs *GossipSubRouter) Publish(msg *Message) {
-	*msg.HopCount++
+	if gs.hopWavePublish {
+		*msg.HopCount += 1
 
-	if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
-		*msg.HopCount = 0
-	}
-	if gs.params.HopWaveCount == 0 {
-		*msg.HopCount = 1
-	}
+		if *msg.HopCount >= int32(gs.params.HopWaveInterval) {
+			*msg.HopCount = 0
+		}
 
-	if gs.hopWavePublish && *msg.HopCount == 0 {
-		for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveCount) {
-			gs.sendRPC(p, rpc, false)
+		if *msg.HopCount != 0 {
+			for p, rpc := range selectPeers(gs.rpcs(msg), gs.params.HopWaveFactor) {
+				gs.sendRPC(p, rpc, false)
+			}
+		} else {
+			for p, rpc := range gs.rpcs(msg) {
+				gs.sendRPC(p, rpc, false)
+			}
 		}
 	} else {
+		*msg.HopCount = 0
+
 		for p, rpc := range gs.rpcs(msg) {
 			gs.sendRPC(p, rpc, false)
 		}
 	}
 }
 
-func selectPeers(item iter.Seq2[peer.ID, *RPC], count int) iter.Seq2[peer.ID, *RPC] {
+func selectPeers(item iter.Seq2[peer.ID, *RPC], factor float64) iter.Seq2[peer.ID, *RPC] {
 	return func(yield func(peer.ID, *RPC) bool) {
 		items := make([]struct {
 			peer peer.ID
@@ -1236,11 +1248,15 @@ func selectPeers(item iter.Seq2[peer.ID, *RPC], count int) iter.Seq2[peer.ID, *R
 			items[i], items[j] = items[j], items[i]
 		}
 
-		// Select up to count items
-		selected := items
-		if count > 0 && len(items) > count {
-			selected = items[:count]
+		count := int(float64(len(items)) * factor)
+		if factor > 0 && len(items) > 0 && count == 0 {
+			count = 1
 		}
+		if count > len(items) {
+			count = len(items)
+		}
+
+		selected := items[:count]
 
 		for _, item := range selected {
 			if !yield(item.peer, item.rpc) {
